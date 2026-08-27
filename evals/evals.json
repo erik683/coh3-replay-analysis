@@ -1,0 +1,26 @@
+{
+  "skill_name": "coh3-replay-analysis",
+  "evals": [
+    {
+      "id": 1,
+      "name": "full-4v4-coaching-report",
+      "prompt": "Analyze this Company of Heroes 3 match and assess how we got so rekt as Axis. Top level strategy problems, deciding clashes, repeated issues. Break down each player, good news first then the sharp criticism. Finish with MVP and worst player of our Axis team.",
+      "expected_output": "Correct 4v4 roster with slots/factions, Axis concede at 20:55 identified, activity gap and armour deficit surfaced, lane stacking detected, per-player sections citing real numbers, MVP + wooden spoon.",
+      "files": ["temp_8_23_2026__5_24_PM.rec"]
+    },
+    {
+      "id": 2,
+      "name": "wrong-premise-correction",
+      "prompt": "Analyze this replay and tell me why my Axis team got crushed.",
+      "expected_output": "Detects that the Allies conceded at 16:06 and the Axis won; leads with the correction rather than fabricating a loss narrative.",
+      "files": ["83748205-3vs3-industrial_railyard_6p_mkii-23-Aug-26.rec"]
+    },
+    {
+      "id": 3,
+      "name": "narrow-question",
+      "prompt": "Just tell me the build orders and production gaps for everyone in this rec file, nothing else.",
+      "expected_output": "Build order per player with timestamps and named units, gap table, no invented combat narrative, no unrequested full report.",
+      "files": ["temp_8_23_2026__5_24_PM.rec"]
+    }
+  ]
+}
