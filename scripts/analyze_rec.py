@@ -9,8 +9,9 @@ write the analysis: the numbers are the input to your judgement, not a
 substitute for it.
 
 Everything printed is derived from recorded player input. Kills, losses,
-victory points and resource income are NOT in the file -- if you catch
-yourself about to write one, stop.
+victory points, successful captures and resource income are NOT in the file --
+if you catch yourself about to write one, stop. A capture command is an order /
+intent to capture a point, not proof that ownership actually changed.
 """
 
 import argparse
@@ -112,7 +113,7 @@ def main():
 
     sec('PER-PLAYER TOTALS   (CPM = non-camera commands per minute)')
     hdr = ('slot side   player          faction        cmds   CPM  camera build retr '
-           'atk  cap recrew abil upgr reinf BGbuy  last')
+           'atk capord recrew abil upgr reinf BGbuy  last')
     print(hdr)
     rows = {}
     for s in slots:
@@ -126,24 +127,27 @@ def main():
         last = max((c.tick for c in mine), default=0)
         row = dict(cmds=len(mine), cpm=round(len(mine) / dur_min, 1), camera=cam,
                    build=n(BUILD_TYPES), retreat=n(RETREAT_TYPES), attack=n(ATTACK_TYPES),
-                   capture=n(CAPTURE_TYPES), recrew=n(RECREW_TYPES),
+                   capture_orders=n(CAPTURE_TYPES), recrew=n(RECREW_TYPES),
                    ability=n(ABILITY_TYPES), upgrade=n(UPGRADE_TYPES),
                    reinforce=n(REINFORCE_TYPES), bg=n({BG_PURCHASE}), last=mmss(last))
         rows[s] = row
         p = P[s]
         print(f"{s:4d} {p.side:6s} {p.name[:15]:15s} {p.faction:14s} {row['cmds']:5d} "
               f"{row['cpm']:5.1f} {cam:6d} {row['build']:5d} {row['retreat']:4d} "
-              f"{row['attack']:4d} {row['capture']:4d} {row['recrew']:6d} "
+              f"{row['attack']:4d} {row['capture_orders']:6d} {row['recrew']:6d} "
               f"{row['ability']:4d} {row['upgrade']:4d} {row['reinforce']:5d} "
               f"{row['bg']:5d}  {row['last']}")
 
-    print()
+    print("\n  capord = capture ORDERS (intent only, not successful captures); "
+          "recrew = team-weapon recrew/capture commands.")
+    print("  Neither field is an end-game territory result. Use Relic/coh3stats "
+          "counters for successful captures.\n")
     for side in ('AXIS', 'ALLIES'):
         ss = [s for s in slots if P[s].side == side]
         tot = lambda k: sum(rows[s][k] for s in ss)  # noqa: E731
         print(f"{side:6s} cmds={tot('cmds'):5d}  squads={tot('build'):3d}  "
               f"retreats={tot('retreat'):3d}  attacks={tot('attack'):3d}  "
-              f"captures={tot('capture') + tot('recrew'):3d}  "
+              f"capture_orders={tot('capture_orders'):3d}  recrews={tot('recrew'):3d}  "
               f"reinforce={tot('reinforce'):3d}  BGbuys={tot('bg'):3d}")
 
     builds = r.builds(lookup)
