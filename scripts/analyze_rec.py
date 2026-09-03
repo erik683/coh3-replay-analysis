@@ -9,8 +9,9 @@ write the analysis: the numbers are the input to your judgement, not a
 substitute for it.
 
 Everything printed is derived from recorded player input. Kills, losses,
-victory points and resource income are NOT in the file -- if you catch
-yourself about to write one, stop.
+victory points, successful captures and resource income are NOT in the file --
+if you catch yourself about to write one, stop. A capture command is an order /
+intent to capture a point, not proof that ownership actually changed.
 """
 
 import argparse
@@ -64,8 +65,6 @@ def main():
     r = Replay(args.replay)
     lookup = {}
     if not args.no_lookup:
-        # A missing cache means a ~110 MB download; if that fails we still want
-        # the whole brief, just with raw pbgids instead of names.
         try:
             lookup = load_lookup(cache=args.cache)
         except Exception as exc:
@@ -96,8 +95,6 @@ def main():
         who = ', '.join(P[s].name for _, s in quitters)
         print(f"OUTCOME     {lose} conceded at {mmss(tick)} ({who}) -> {win} won")
     elif quitters:
-        # Some players surrendered but not a whole side -- that is a partial
-        # concede, not a team loss. Their team may still have won.
         who = ', '.join(f"{P[s].name} ({P[s].side}) at {mmss(t)}" for t, s in quitters)
         print(f"OUTCOME     partial concede only -- {who}. Not every player on a side "
               "surrendered, so the file does NOT state a winner. Do not guess.")
@@ -112,7 +109,7 @@ def main():
 
     sec('PER-PLAYER TOTALS   (CPM = non-camera commands per minute)')
     hdr = ('slot side   player          faction        cmds   CPM  camera build retr '
-           'atk  cap recrew abil upgr reinf BGbuy  last')
+           'atk capord recrew abil upgr reinf BGbuy  last')
     print(hdr)
     rows = {}
     for s in slots:
@@ -121,29 +118,30 @@ def main():
 
         def n(types):
             return sum(1 for c in mine if c.type in types)
-        # Last REAL action: r.commands still carries the type-158 heartbeat,
-        # which runs to the end of the file for everyone and would hide a drop.
         last = max((c.tick for c in mine), default=0)
         row = dict(cmds=len(mine), cpm=round(len(mine) / dur_min, 1), camera=cam,
                    build=n(BUILD_TYPES), retreat=n(RETREAT_TYPES), attack=n(ATTACK_TYPES),
-                   capture=n(CAPTURE_TYPES), recrew=n(RECREW_TYPES),
+                   capture_orders=n(CAPTURE_TYPES), recrew=n(RECREW_TYPES),
                    ability=n(ABILITY_TYPES), upgrade=n(UPGRADE_TYPES),
                    reinforce=n(REINFORCE_TYPES), bg=n({BG_PURCHASE}), last=mmss(last))
         rows[s] = row
         p = P[s]
         print(f"{s:4d} {p.side:6s} {p.name[:15]:15s} {p.faction:14s} {row['cmds']:5d} "
               f"{row['cpm']:5.1f} {cam:6d} {row['build']:5d} {row['retreat']:4d} "
-              f"{row['attack']:4d} {row['capture']:4d} {row['recrew']:6d} "
+              f"{row['attack']:4d} {row['capture_orders']:6d} {row['recrew']:6d} "
               f"{row['ability']:4d} {row['upgrade']:4d} {row['reinforce']:5d} "
               f"{row['bg']:5d}  {row['last']}")
 
-    print()
+    print("\n  capord = capture ORDERS (intent only, not successful captures); "
+          "recrew = team-weapon recrew/capture commands.")
+    print("  Neither field is an end-game territory result. Use Relic/coh3stats "
+          "counters for successful captures.\n")
     for side in ('AXIS', 'ALLIES'):
         ss = [s for s in slots if P[s].side == side]
-        tot = lambda k: sum(rows[s][k] for s in ss)  # noqa: E731
+        tot = lambda k: sum(rows[s][k] for s in ss)
         print(f"{side:6s} cmds={tot('cmds'):5d}  squads={tot('build'):3d}  "
               f"retreats={tot('retreat'):3d}  attacks={tot('attack'):3d}  "
-              f"captures={tot('capture') + tot('recrew'):3d}  "
+              f"capture_orders={tot('capture_orders'):3d}  recrews={tot('recrew'):3d}  "
               f"reinforce={tot('reinforce'):3d}  BGbuys={tot('bg'):3d}")
 
     builds = r.builds(lookup)
@@ -233,8 +231,6 @@ def main():
             lhs, rhs = args.anchors.split(':')
             parsed = {'AXIS': tuple(float(v) for v in lhs.split(',')),
                       'ALLIES': tuple(float(v) for v in rhs.split(','))}
-            # Arity must be checked here: make_projector unpacks these as
-            # (x, z) far below, outside this guard.
             if any(len(v) != 2 for v in parsed.values()):
                 raise ValueError('each side needs exactly two coordinates')
             anchors = parsed
@@ -277,8 +273,6 @@ def main():
                 continue
             lat = sum(q[2] for q in pos[s]) / len(pos[s])
             dep = sum(q[1] for q in pos[s]) / len(pos[s])
-            # "forward" is opposite for the two sides: Axis advances as depth
-            # rises, Allies as it falls. Own-half must respect that.
             if P[s].side == 'AXIS':
                 own = sum(1 for q in pos[s] if q[1] < 50)
             else:
@@ -347,8 +341,6 @@ def main():
               f"{max(cams.values())} -- possible drop, spectator lag or a static-camera style")
     idle = []
     for s in slots:
-        # Noise-filtered: the ~2s heartbeat (158) never stops, so scanning
-        # r.commands here would make a 45s gap arithmetically impossible.
         ts = sorted(c.tick for c in acts if c.slot == s)
         for i in range(len(ts) - 1):
             if ts[i + 1] - ts[i] > 45 * TICKS_PER_SEC:

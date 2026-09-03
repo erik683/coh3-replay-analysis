@@ -1,306 +1,348 @@
 ---
 name: coh3-replay-analysis
-description: Analyse a Company of Heroes 3 match and write a coaching-style report. Two data sources, fused: coh3stats.com / Relic's API supplies end-game stats the replay can't (kills, losses, damage, vehicles killed/lost, captures, veterancy, authoritative win/loss), and the replay (.rec) supplies the input signatures — build orders, retreats, abilities, chat, territory and lane control — decoded from the raw binary. Preferred entry point is a coh3stats match URL or id (pulls stats and auto-downloads the replay); a loose .rec, or an OCR'd post-game screenshot, are fallbacks. Use this skill whenever someone links a coh3stats match, uploads or points at a .rec file, mentions a CoH3 replay, asks "why did we lose that game", asks for a post-game breakdown, MVP/worst-player calls, build-order review, or any analysis of a Company of Heroes 3 match — even without the words "replay" or "rec file". The format is undocumented and guessing at it produces confidently wrong player attributions, so always parse rather than guess.
+description: Analyse a Company of Heroes 3 match and write a coaching-style report. Fuse two evidence layers: coh3stats.com / Relic end-game counters describe what happened (kills, losses, damage, vehicle/squad trades, successful captures, authoritative result), while the replay (.rec) describes how players acted (build orders, retreats, abilities, command activity, territory/lane inputs). Preferred entry point is a coh3stats match URL or id. A loose .rec or post-game screenshot is a fallback. Use this skill whenever someone links a coh3stats match, uploads a CoH3 replay, asks why a team lost, requests a player breakdown, MVP/worst-player call, build-order review, or other replay analysis. The replay format is undocumented and command volume is not performance, so always parse and preserve the evidence hierarchy rather than guessing.
 ---
 
-# CoH3 replay (.rec) analysis
+# CoH3 replay analysis
 
-A `.rec` is Relic's deterministic **input log**. It records every command every
-player issued, with tick timestamps and world coordinates. The game recreates
-the match by replaying those inputs through the engine.
+A `.rec` is Relic's deterministic **input log**. It records commands with tick
+timestamps and, where applicable, world coordinates. The engine recreates the
+match from those inputs.
 
-That single fact governs everything here.
+That means the replay records **intent/process**, not simulated combat outcomes.
 
-## What is and is not in the file
+## Two evidence layers
 
-**Present:** players, factions, teams, slot ids, map, duration, every command
-with its tick and (for positional commands) x/z coordinates, unit production
-with blueprint ids, ability and upgrade use, battlegroup purchases, chat
-messages, surrender events.
+### Relic / coh3stats = WHAT happened
 
-**Absent:** kills, losses, damage, squad wipes, veterancy, victory-point
-tickers, resource income, unit health, what any player could see. None of it
-exists until the engine re-simulates.
+Use end-game counters for:
 
-So you can say *"DeathStyle retreated nine squads in twenty seconds"* — that is
-a recorded input. You cannot say *"DeathStyle lost his Panzergrenadiers to a
-flank"* — that is fiction. When you want to describe a fight, describe the
-**input signature** of the fight (retreat bursts, ability spikes, production
-responses, territory swings) and let the reader infer the rest. Users will ask
-for kill counts and win/loss stats; tell them plainly the format does not carry
-them rather than estimating.
+- model kills/deaths (`ekills`, `edeaths`)
+- squad kills/losses (`sqkill`, `sqlost`)
+- vehicle kills/losses/abandons (`vkill`, `vlost`, `vabnd`)
+- damage (`dmgdone`)
+- successful strategy-point captures (`pcap`) and other outcome counters
+- final veterancy
+- authoritative win/loss
 
-## Primary workflow: start from the coh3stats match
+### `.rec` = HOW they played
 
-The best report fuses two sources, and **one command pulls both**:
+The replay contains:
+
+- roster, factions, teams, slots, map, duration
+- build orders and production timing
+- retreat orders and retreat bursts
+- attack / move / ability / upgrade commands
+- battlegroup purchases
+- positional orders, territory depth and lane structure
+- chat and surrender events
+
+The replay does **not** contain kills, losses, damage, unit health, resource
+income, successful point captures, or who actually won an individual fight.
+
+So:
+
+- Good: `DeathStyle issued six retreat orders in fourteen seconds.`
+- Bad: `DeathStyle lost six squads in that fight.`
+
+The first is recorded input. The second requires outcome/simulation evidence.
+
+## Mandatory source-selection gate
+
+**If the user supplies a coh3stats match URL or match id, the Relic/coh3stats
+end-game layer is mandatory for any overall performance ranking or causal
+verdict.** Do not silently fall back to `.rec`-only analysis just because a
+replay file is also available.
+
+Preferred command:
 
 ```bash
 python3 scripts/coh3stats.py match <coh3stats-match-URL-or-id>
 ```
 
-e.g. `... match https://coh3stats.com/matches/84033636` (a bare id works too).
-It:
+This fetches the end-game counters and then runs the replay analysis when the
+replay is available.
 
-1. fetches Relic's **end-game stats** from coh3stats — per player: kills
-   (`ekills`/`sqkill`/`vkill`), losses (`edeaths`/`sqlost`/`vlost`/`vabnd`),
-   damage, captures, veterancy — plus the **authoritative win/loss** (Relic
-   records who won; no need to infer it from a surrender);
-2. downloads the **replay** and runs the full input-signature analysis under it
-   (everything `analyze_rec.py` prints — build orders, retreats, territory).
+If the API is temporarily unavailable but the user supplied the match URL:
 
-**The two layers answer different questions and must stay labelled:**
+1. still parse the replay for process/timeline observations;
+2. label the result **`.rec-only / outcome counters unavailable`**;
+3. **withhold MVP, wooden-spoon, carry/passenger, combat-efficiency, and strong
+   player-ranking conclusions** until the end-game counters are recovered or
+   supplied by the user;
+4. ask for/pull the post-game table rather than substituting CPM for outcomes.
 
-- **API = what happened.** Outcomes the engine simulated: who killed and lost
-  what, damage, captures, final veterancy.
-- **`.rec` = how they played.** The recorded inputs: build order, production
-  gaps, retreat bursts, territory and lane structure.
+If the match is a custom lobby and has no coh3stats record, a supplied screenshot
+of the post-game table can be used as screen-reported outcome evidence.
 
-Never fuse them into one sentence. "OstwindRush got 101 kills for 37 losses"
-(API) and "OstwindRush sat at 90% own-half" (`.rec`) are both true and together
-tell the story — but an API kill count welded into a `.rec` claim is the exact
-fabrication this skill exists to prevent. Read them side by side; the tension
-between them is usually the insight (most-active player, lowest damage; passive
-player, best trades).
+Useful flags:
 
-**The anchor.** `python3 scripts/coh3stats.py player` (no args) prints the
-anchor's long-term record across modes/factions; the match report centres on the
-anchor's team and flags them with `*`. The anchor is **DeathStyle (#1101261)**.
-The friend group plays as a **2–4 stack, sometimes with randoms filling the
-rest**, so teammates change game to game — learn who recurs rather than assuming
-a fixed roster. Override per run with `--anchor <profile_id>`, or pass any
-profile id/URL to `player`.
+- `--rec <file>` — use a local replay instead of downloading
+- `--no-replay` — stats only
+- `--anchor <profile_id>` — override the anchor
+- `--json <out>` — save raw match JSON
 
-**Constraints (verified against the live service):**
+The default anchor is **DeathStyle (#1101261)**. The friend group may be a 2–4
+stack with random teammates; never assume a fixed roster.
 
-- **Automatch only.** coh3stats has ranked and unranked automatch plus vs-AI.
-  Pure custom lobbies (matchtype `Custom`) are not there; if `match` errors that
-  the id is unknown, the game wasn't tracked — fall back to a supplied `.rec`.
-- **The replay sometimes needs one manual click.** The direct download works
-  only once coh3stats has *materialised* the `.rec`; generating a missing one is
-  behind a browser challenge a script can't pass. If the command says the replay
-  isn't available, open the match page, click **Download Replay**, then re-run
-  with `--rec <downloaded.rec>`. The end-game stats stand on their own meanwhile.
-- **Site down / not on coh3stats.** Fall back to the `.rec`-only path below, and
-  for the combat numbers, OCR of the in-game **post-game score screen** the user
-  screenshots — fold it in labelled *screen-reported*, same footing as the API.
+## Replay-only workflow
 
-Useful flags: `--rec <file>` (skip the download, use a local replay),
-`--no-replay` (end-game stats only), `--anchor <id>`, `--json <out>`.
-
-## The `.rec` layer (driven by the above, or run standalone)
+For a loose replay with no tracked match:
 
 ```bash
 python3 scripts/analyze_rec.py /path/to/replay.rec
 ```
 
-Use this directly when you have a loose `.rec` and no coh3stats match (custom
-games, or a file a friend hands you). It prints the whole input-signature
-evidence brief: match header, per-player totals, build orders, production gaps,
-squad composition, vehicle timeline, retreat bursts, activity and attack
-timelines, territory/lane analysis, abilities, battlegroup purchases, chat,
-anomalies, and a command histogram. Read it, then write the report. Useful flags:
+Useful flags:
 
-- `--json out.json` — structured output alongside the text
-- `--no-lookup` — skip blueprint names (instant, but no unit names or vehicle
-  classification). Only for a quick sanity peek.
-- `--block N` — timeline granularity in minutes (default 3; use 2 for games
-  under 15 minutes, 5 for games over 35)
-- `--cache PATH` — where to keep the blueprint id table
+- `--json out.json`
+- `--no-lookup`
+- `--block N`
+- `--cache PATH`
+- `--anchors 'axisX,axisZ:alliesX,alliesZ'`
 
-The first run downloads ~110 MB of blueprint data from the `cohstats/coh3-data`
-repo and caches a small lookup table (`coh3_pbgid_cache.json`). That takes a
-minute or two; every run after it is instant. If the download fails, the parser
-still works — you just get raw `pbgid:198340` instead of `panzergrenadier_ak`.
+`references/rec-format.md` documents the byte-level format.
+`references/coh3stats-api.md` documents the end-game API.
+`references/scoring.md` defines the evidence hierarchy and scoring guardrails.
 
-For anything the script doesn't cover, import the parser directly:
+## Checks before writing
 
-```python
-import sys; sys.path.insert(0, 'scripts')
-from coh3rec import Replay, load_lookup, team_anchors, make_projector, mmss
-r = Replay('game.rec')
-lookup = load_lookup()
-[c for c in r.commands if c.type == 78]   # every retreat
-```
+### 1. Verify slot mapping
 
-`references/rec-format.md` has the byte-level `.rec` format if the parser ever
-breaks on a new patch; `references/coh3stats-api.md` documents the coh3stats /
-Relic API endpoints, the `counters` fields, and the replay-download mechanics if
-that side ever needs fixing.
+The header is not stored in slot order. The slot field is authoritative for the
+command stream. `analyze_rec.py` prints `slot check`; if it reports a mismatch,
+stop and investigate rather than publishing player-specific claims.
 
-## Two checks before you write anything
+### 2. Verify the outcome
 
-**1. Verify the slot mapping.** The script prints `slot check`. Player records
-in the header are **not** stored in slot order, and the slot field — not header
-position — is the id used in the command stream. Get this wrong and every
-per-player judgement lands on the wrong human, which is the worst possible
-failure mode for this skill. The check cross-references each slot's built units
-against its header faction; if it reports a mismatch, stop and investigate
-rather than publishing. Two Wehrmacht players on the same team are
-indistinguishable by faction alone, so this check is the only thing standing
-between you and a confident misattribution.
+When coh3stats is available, Relic's result is authoritative.
 
-**2. Verify the outcome.** If you came in through `coh3stats.py match`, the API
-states the winner authoritatively (`result team N WON`) — use it and move on.
-Working from a bare `.rec`, the only outcome the file states directly is a
-concede: `PCMD_Surrender` commands from **every** member of one side. If the
-script says no surrender was recorded, the match ended by annihilation, VP
-depletion, or a drop, and **the file does not say who won** — say so rather than
-inferring it from who looked stronger. (A partial concede — some but not all of a
-side — is not a team result either; the script now labels that case explicitly.)
+With a bare replay, the only directly recorded team result is a full-side
+`PCMD_Surrender`. A partial concede is not a team result. If no full-side
+surrender exists, say the replay does not state the winner.
 
-(A third check, once you reach the territory section: if the anchor warning
-fires, resolve it before quoting depth numbers. See below.)
+### 3. Verify evidence completeness
 
-Also check the premise you were given. Users misremember which game they
-uploaded and which side they were on. If the file contradicts them — they say
-they lost and the enemy conceded — lead with that correction before anything
-else. Being agreeable about it wastes their time.
+Before an MVP/worst-player or strong causal diagnosis, confirm that outcome
+counters are present. If they are missing, the report is process-only.
 
-## Reading the tables
+### 4. Verify territory anchors
 
-**CPM (non-camera commands per minute)** is the workhorse activity metric.
-Command types 157 (camera) and 158 (a ~2s per-player sync heartbeat) are engine
-noise and are excluded. Real CPM is roughly a third of the in-game APM display.
-Rough calibration: under 25 is a passenger, 30–50 is a competent team-game
-player, 80+ is a high-tempo player. A 2× team-level gap in total commands is by
-itself a sufficient explanation for a loss.
+If the territory anchor-quality warning fires, resolve it before quoting depth
+magnitudes. A forward opening order can drag an estimated base anchor inward and
+inflate depth values.
 
-**Build orders and production gaps.** Gaps over ~2.5 minutes and a late "last
-build" are the clearest macro failures in the file, and they are unambiguous —
-no inference needed. Always check gaps against the battlegroup ability list
-before calling someone lazy: a player running a call-in battlegroup legitimately
-builds fewer squads from buildings. Low *activity* is never excused that way.
+## Outcome-first scoring
 
-**Vehicle timeline.** Usually the single most explanatory table. Classification
-comes from the blueprint category, not name matching — `panzergrenadier`
-contains `panzer` but is infantry. Look at the tank/TD counts and, more
-importantly, at *when* each side's armour clusters. A late flood of enemy armour
-against a static defender is what most team-game losses actually look like.
+The central rule is:
 
-**Retreat bursts** (≥3 retreats within 30s) mark the moments a player pulled a
-lot of units out at once. That is where the big fights were. Note the direction
-of inference: a burst means units were saved, which usually means a fight was
-going badly — but a burst on the *enemy* side means your team was winning that
-exchange. In the 4v4 test case the losing team's best moment was visible only as
-nine enemy retreats in twenty seconds.
+> **Outcomes score performance. Inputs diagnose process.**
 
-**Territory.** Depth runs 0 (Axis base) to 100 (Allied base). Because "forward"
-is the opposite direction for each side, **the two team rows are not directly
-comparable** — read the `FRONT LINE` row, their midpoint: above 50 means play is
-happening in Allied territory, below 50 means the Axis is pinned back.
+Never build an overall player-impact ranking from replay command volume.
 
-Base anchors are *estimated* from each player's first positional order, and that
-estimate can fail. A player whose opening order is already at midfield drags his
-side's anchor inward, which inflates every depth number on the board — observed
-in testing producing a front line of 58-68 where the truth was 48-59. The
-estimate can only ever be dragged toward the centre, never away, so the script
-prints an anchor-symmetry ratio and warns below 0.85.
+Use this order of precedence:
 
-**When you see that warning, check it before quoting any depth figure.** The
-per-player first-order positions are printed right there: if one side's players
-opened at a tight cluster near a map corner and the other side's are scattered
-inward, the scattered side's anchor is wrong. Re-run with the good side's corner
-and a plausible mirror:
+1. combat outcomes: squad/vehicle trades, model K/D, damage;
+2. successful objective outcomes: Relic captures/recaptures and result;
+3. survival/economy outcomes and veterancy when available;
+4. replay process evidence: lane pressure, retreat bursts, armour timing,
+   production gaps, ability timing;
+5. raw activity: CPM/APM, attack orders, capture orders.
 
-```bash
-python3 scripts/analyze_rec.py game.rec --anchors '142,127:-130,-140'
-```
+Levels 4–5 explain the result. They do not substitute for levels 1–3.
 
-Auto-correction was tried and deliberately rejected — reflecting the good anchor
-through the map centre fixes some maps and throws others off by 100+ units,
-because bases are not reliably symmetric. A human-checkable warning beats a
-heuristic that is silently wrong. Either way the *trend* is robust even when the
-magnitudes are off; lead with the trend.
+Prefer a multi-dimensional scorecard rather than one magic scalar:
 
-**Lane assignment.** `lateral` is signed offset perpendicular to the base-to-base
-axis. Teammates within ~40 units of each other are contesting the same corridor.
-Two teammates stacked in one lane while a flank goes 1v1 is a real and common
-strategic error that is invisible without this projection.
+- model efficiency = kills / deaths
+- squad trade = squads killed / squads lost
+- vehicle trade = vehicles killed / vehicles lost
+- damage and team damage share
+- successful objectives
+- process context (CPM, retreats, timings, lane pressure)
 
-**Anomalies.** `PCMD_AIPlayer` events, long command gaps, and an outlier-low
-camera count can indicate a disconnect or AI handover. Flag these as possible,
-not confirmed — the meanings are reverse-engineered.
+If the user explicitly requests one MVP or wooden-spoon verdict, choose from the
+outcome card first and use replay process evidence as a tie-breaker/explanation.
+
+## CPM / APM: workload, not impact
+
+CPM excludes camera and sync-heartbeat noise and is useful for measuring
+interaction density. It is **not a performance score**.
+
+High CPM can mean:
+
+- excellent multitasking;
+- inefficient clicking;
+- frantic recovery while losing;
+- a micro-heavy army composition.
+
+Low CPM can mean:
+
+- poor involvement;
+- deliberate/efficient execution;
+- a lower-micro composition;
+- fewer simultaneous responsibilities.
+
+Therefore:
+
+- do not call a low-CPM player a `passenger` without outcome corroboration;
+- do not call a high-CPM player a `carry` without outcome corroboration;
+- do not add CPM directly to an overall player score;
+- a 2× team command gap is a **pressure/context signal**, never by itself a
+  sufficient explanation for a loss when outcome evidence exists;
+- when CPM conflicts with actual trades/damage, follow the outcome evidence and
+  highlight the contrast.
+
+The Steppes regression case is the canonical example: a very low-input Axis
+player led his team in raw kills and vehicle kills, while a more active teammate
+had substantially worse trade efficiency. Ranking from CPM alone reverses the
+actual results.
+
+## Capture orders are intent, not success
+
+Replay `capture_orders` / printed `capord` values are **capture orders** only.
+
+A right-click/order on a VP, fuel, munition or territory point means the player
+wanted a unit to capture it. It does not prove the capture completed, the point
+was held, or the action had strategic value.
+
+Always:
+
+- say **capture orders**, never captures, when quoting the `.rec` field;
+- give capture orders **zero direct performance credit**;
+- use Relic `pcap` / end-game objective counters for successful captures;
+- use territory/front-line movement for map-pressure analysis;
+- distinguish raw point count from the strategic importance of a specific fuel,
+  munition or VP;
+- keep `recrew` separate: those are team-weapon recrew/capture commands, not
+  territory recaptures.
+
+A high capture-order count can support only a narrow process statement such as
+`frequently issued territory orders`.
+
+## Attack and retreat commands are also process evidence
+
+Attack-command totals show interaction/pressure, not damage or fight wins.
+
+Retreat bursts (for example, ≥3 retreat orders inside 30 seconds) identify
+moments where many units were ordered home. Retreating may be good preservation,
+not failure. Use end-game losses/trades to determine whether the player actually
+bled units.
+
+Good cross-layer reasoning:
+
+- `Repeated retreat bursts after 25:00 coincide with poor squad/vehicle trades.`
+- `Despite frequent retreats, the player finished positive in squad trade, so
+  the retreats appear to have preserved the army rather than fed it.`
+
+Bad reasoning:
+
+- `He retreated 40 times, therefore he lost his lane.`
+
+## Build orders and production gaps
+
+Gaps over roughly 2.5 minutes and a late last conventional build can flag macro
+issues, but check battlegroup call-ins and tech choices before calling the gap a
+mistake. Low conventional production can be intentional; low outcome efficiency
+is a separate question.
+
+## Vehicle timeline
+
+Vehicle classification comes from blueprint category, not name substring.
+Focus on **timing**: when light vehicles, tanks, TDs and assault guns appear and
+whether the opponent's armour cluster arrives before an answer is fielded.
+
+When end-game stats are present, pair timing with actual vehicle trades instead
+of inferring effectiveness from build count alone.
+
+## Territory and lanes
+
+Depth runs from Axis base toward Allied base. The two side rows are not directly
+comparable; use the `FRONT LINE` midpoint/trend.
+
+Lane assignment uses lateral offset from the base-to-base axis. Teammates stacked
+within the same corridor while another flank is isolated can be a genuine team
+structure problem, but avoid claiming a lane was won/lost solely from command
+positions when combat outcomes are available.
+
+## Anomalies
+
+`PCMD_AIPlayer` events, long real-command gaps and outlier camera-event counts
+can indicate a disconnect or AI handover. Report these as possible, not certain.
 
 ## Writing the report
 
-Default structure, unless the user asks for something else:
+Default structure:
 
-```
-1. Match header — map, mode, duration, roster with factions, and the outcome.
-   With coh3stats the winner is authoritative; from a bare .rec it's the concede
-   at MM:SS, or "file does not record a winner".
-2. One short paragraph naming the two layers you're working from — Relic's
-   end-game stats (what happened) and the replay inputs (how they played) — or,
-   .rec-only, what a replay can and can't show.
-3. Top-level findings — 4 to 7 numbered items, each anchored to a specific
-   number or table. The strongest ones cross the layers: kills-vs-losses and
-   damage (API) set against activity, armour timing, lane structure and
-   territory trend (.rec). Macro blackouts, unused mechanics.
-4. The deciding moments — timestamped, described by input signature, with the
-   end-game toll where it sharpens the point (a retreat burst that shows up as
-   squads lost; an armour push that shows up as vehicle kills).
-5. Repeated issues — patterns that recur, especially across multiple replays
-   from the same group (see the anchor's match history for who keeps repeating
-   which mistake).
-6. Per-player breakdown — for each player, genuine strengths first with the
-   evidence, then the sharp criticism with the evidence. Both halves must cite
-   numbers; unsupported praise is as useless as unsupported blame. When the two
-   layers disagree — busiest player, worst trades; quiet player, best K/D — say
-   so; that gap is often the most useful thing in the report.
-7. MVP and a wooden-spoon pick, one line each, each justified by a stat. Prefer
-   an outcome stat (kills/losses/damage) over raw activity for these calls —
-   activity is effort, not impact.
-```
+1. Match header — map, mode, duration, roster, authoritative result if known.
+2. Evidence note — state whether both outcome + replay layers are present.
+3. **Outcome diagnosis first** — damage, squad/vehicle trades, successful
+   objectives, major efficiency disparities.
+4. Process explanation — CPM/context, production timing, armour timing, lanes,
+   retreat/ability signatures.
+5. Deciding windows — timestamped replay input signatures, carefully separated
+   from end-game outcome totals.
+6. Repeated issues — recurring patterns, especially across multiple replays.
+7. Per-player breakdown — strengths first, then criticism, both evidence-backed.
+8. MVP / wooden spoon only when outcome evidence is sufficient.
 
-Cover the user's own team in depth and the opposition briefly, unless asked
-otherwise. If the user asks for the analysis of a side other than the one they
-named, give them what the file supports.
-
-Tone: direct and specific. These reports are for players who want to improve, so
-soft-pedalling wastes the reading. But the "uninstall"/worst-player framing is
-banter between teammates — deliver it as a data-backed verdict with a reason,
-not as contempt, and never extend it to opponents who aren't in the room. If the
-chat log contains abuse, report it factually as part of that player's read; it
-is a real team-game problem, but don't sermonise.
-
-Every claim traces to a table. If you can't point at the number, cut the line.
+Every claim should trace to a table or recorded event. If you cannot point at the
+evidence class, cut the line.
 
 ## Worked examples
 
-**Describing a fight.**
-- Bad: *"He lost his squads in a bad engagement at the north VP and never
-  recovered."* — kills, positions and causation the file doesn't contain.
-- Good: *"15:41–16:01 — poker retreats nine squads in twenty seconds, then five
-  more at 17:26. Something on your side was winning there. Your follow-up
-  production over the same window was a pioneer and a medical truck."*
+### Activity versus impact
 
-**Calling out a weak player.**
-- Bad: *"K0pF was useless and threw the game."*
-- Good: *"K0pF5414+ at 16.6 commands per minute — 40% of his nearest teammate.
-  Two produced squads in twenty-one minutes, three capture commands. A call-in
-  battlegroup explains fewer buildings, not fewer actions."*
+Bad:
 
-**Reporting an anomaly.**
-- Bad: *"poker disconnected at 6:47."*
-- Good: *"At 06:47 an AI-player event fires on poker's slot after a 60-second
-  command gap, and his camera-event count is a quarter of everyone else's. That
-  fits a brief drop, but the file doesn't say so outright."*
+`K0pF was useless: 16 CPM, hardly any capture orders.`
 
-**Crossing the two layers** (this is where the coh3stats data earns its keep).
-- Bad: *"DeathStyle carried the team — 57.7 CPM, most builds, most attacks."* —
-  activity mistaken for impact.
-- Good: *"DeathStyle was the busiest player on the map (57.7 CPM) and the least
-  effective with it: 38 kills against 65 losses, 4 vehicles lost, and the lowest
-  damage on his team (4,428). Meanwhile OstwindRush — who the input log makes
-  look like a passenger at 21.9 CPM and 90% own-half — quietly had the team's
-  best game by outcome: 101 kills for 37 losses. The wooden spoon goes on effort
-  without results, not on a low command count."*
+Good:
+
+`K0pF operated at very low command tempo, but the end-game outcomes show high
+impact: team-leading raw kills and vehicle kills. The real criticism is his high
+replacement burden, not inactivity.`
+
+### Capture orders
+
+Bad:
+
+`DeathStyle had 47 captures, best map player.`
+
+Good:
+
+`DeathStyle issued 47 capture orders in the replay. Relic's end-game table must
+be used to determine how many strategy points were actually captured.`
+
+### Retreats
+
+Bad:
+
+`Six retreats at 37:34 means six squads were lost.`
+
+Good:
+
+`Six retreat orders landed between 37:34 and 37:48, marking a major disengagement
+window. Whether that represented effective preservation or a losing exchange is
+judged from end-game losses/trades, not the retreat count itself.`
+
+### Cross-layer contradiction
+
+When the layers disagree, the disagreement is usually the insight:
+
+`Player A had the highest CPM but poor squad/vehicle trades; Player B had low CPM
+but positive trades and strong damage. A was busier, B was more effective.`
+
+Never resolve that contradiction by treating activity as hidden performance.
 
 ## Multiple replays
 
-When several `.rec` files are available from the same group, run all of them and
-look for what repeats. A single game's mistakes are noise; the same player
-banking command points until minute 15 in three consecutive games is the finding
-worth writing down. Cross-replay comparison is where this skill earns the most,
-so ask whether more replays exist when the user is clearly reviewing their own
-team rather than a one-off.
+Across several matches, look for repeated outcome/process relationships rather
+than repeated raw APM alone. Examples:
+
+- consistently high squad losses despite high damage;
+- repeated vehicle-trade deficits after a specific tech timing;
+- frequent capture orders but low successful objective outcomes;
+- persistently low CPM **and** low damage/trades/map outcomes.
+
+A single game's command count is noisy. Repeated outcome-backed patterns are the
+coaching finding worth keeping.

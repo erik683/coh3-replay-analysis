@@ -5,7 +5,7 @@
       "id": 1,
       "name": "full-4v4-coaching-report",
       "prompt": "Analyze this Company of Heroes 3 match and assess how we got so rekt as Axis. Top level strategy problems, deciding clashes, repeated issues. Break down each player, good news first then the sharp criticism. Finish with MVP and worst player of our Axis team.",
-      "expected_output": "Correct 4v4 roster with slots/factions, Axis concede at 20:55 identified, activity gap and armour deficit surfaced, lane stacking detected, per-player sections citing real numbers, MVP + wooden spoon.",
+      "expected_output": "Correct 4v4 roster with slots/factions, Axis concede at 20:55 identified, activity gap and armour deficit surfaced, lane stacking detected, per-player sections citing real numbers. MVP/wooden spoon only if outcome counters are available; otherwise explicitly withhold performance awards rather than ranking by CPM.",
       "files": ["temp_8_23_2026__5_24_PM.rec"]
     },
     {
@@ -21,6 +21,48 @@
       "prompt": "Just tell me the build orders and production gaps for everyone in this rec file, nothing else.",
       "expected_output": "Build order per player with timestamps and named units, gap table, no invented combat narrative, no unrequested full report.",
       "files": ["temp_8_23_2026__5_24_PM.rec"]
+    },
+    {
+      "id": 4,
+      "name": "match-url-requires-outcome-layer",
+      "prompt": "Here is a coh3stats match URL and the replay. Analyze why Axis lost and pick MVP and worst player.",
+      "expected_output": "Treats the match URL as requiring Relic/coh3stats end-game counters before issuing MVP/worst-player or combat-efficiency rankings. If counters cannot be retrieved, still analyzes replay process but explicitly labels the report rec-only and withholds performance awards rather than substituting CPM, attack orders, or capture orders.",
+      "files": ["temp_9_2_2026__5_47_PM.rec"]
+    },
+    {
+      "id": 5,
+      "name": "low-input-high-impact-contradiction",
+      "prompt": "The replay shows one Axis player with very low CPM, but the end-game table says he led Axis in raw kills and vehicle kills with a positive model K/D. Rank the players and explain the contradiction.",
+      "expected_output": "Does not call the low-CPM player a passenger or worst player. Outcome evidence leads the ranking; CPM is described only as low workload/input tempo. Criticism, if any, is based on outcome costs such as squad/vehicle losses. Explicitly states that activity is effort/process, not impact.",
+      "files": []
+    },
+    {
+      "id": 6,
+      "name": "capture-order-is-not-capture",
+      "prompt": "Player A has 47 capture commands in the replay while the post-game table says 15 strategy points captured. Who was better on the map?",
+      "expected_output": "Calls the replay value capture orders, not captures. Gives the 47 orders zero direct performance credit and uses the 15 successful captures plus territory/context to assess map results. Does not infer success, ownership duration, or strategic value from right-click/order count.",
+      "files": []
+    },
+    {
+      "id": 7,
+      "name": "activity-gap-not-sufficient-cause",
+      "prompt": "The winning team issued twice as many meaningful replay commands. Is that why the other team lost?",
+      "expected_output": "Treats the 2x command gap as a pressure/workload signal, not a sufficient causal explanation. Requires outcome evidence such as squad/vehicle trades, damage and successful objectives before naming the main cause. Notes that high CPM can coexist with poor efficiency and low CPM with strong outcomes.",
+      "files": []
+    },
+    {
+      "id": 8,
+      "name": "retreats-are-not-losses",
+      "prompt": "A player had repeated mass retreat bursts late game. Did he throw away his army?",
+      "expected_output": "Explains that retreat commands mark disengagement/preservation intent and do not encode losses. Uses end-game squad/vehicle losses or other outcome evidence to decide whether preservation was effective. Does not convert retreat count into wipe count or lane-loss certainty.",
+      "files": []
+    },
+    {
+      "id": 9,
+      "name": "parser-capture-order-schema",
+      "prompt": "Inspect the replay analyzer output/schema for capture-related fields. What do the capture and recrew numbers mean?",
+      "expected_output": "Parser output uses capord/capture_orders for territory capture commands and explicitly states they are intent only. Team-weapon recrew is a separate recrew field and is never added into territory capture-order totals. No parser field named captures implies successful territory ownership changes.",
+      "files": []
     }
   ]
 }
