@@ -33,7 +33,7 @@ Use this order of precedence:
    resource-spend fields when available.
 4. **Replay process evidence**: lane position, retreat bursts, vehicle timing,
    production gaps, ability timing, pressure windows.
-5. **Raw activity**: CPM/APM, attack-command count, capture-command count.
+5. **Raw activity**: CPM/APM, attack-command count, capture-order count.
 
 Levels 4-5 explain *how* somebody played. They are not substitutes for levels
 1-3.
@@ -81,6 +81,22 @@ A high number of capture orders can support a narrow process statement such as
 "frequently issued territory orders". It cannot support "best map player" by
 itself.
 
+### Parser terminology contract
+
+`analyze_rec.py` must make this distinction impossible to miss:
+
+- printed per-player column: `capord` = **capture orders**;
+- structured JSON key: `capture_orders`;
+- team summary: `capture_orders=...`;
+- `recrew` / `recrews` is reported separately because it means team-weapon
+  recrew/capture commands, **not territory recapture**;
+- never sum `RECREW_TYPES` into territory capture-order totals.
+
+This naming is intentionally more verbose than `cap`/`captures`. The older names
+encouraged downstream analysts to treat an input command as a completed
+objective, and the team summary also incorrectly mixed team-weapon recrews into
+its `captures` number.
+
 ## Retreats and attack commands
 
 These are also input signatures, not outcomes.
@@ -101,8 +117,8 @@ Before issuing an overall player ranking or causal verdict, answer these:
    the user?
 3. If not, is the report explicitly labelled `.rec-only` and are MVP/worst-player
    / combat-efficiency conclusions withheld?
-4. Are every replay `capture` value and timeline entry described as a capture
-   **order**, not a successful capture?
+4. Are every replay capture-order value and timeline entry described as a
+   capture **order**, not a successful capture?
 5. If CPM conflicts with outcome efficiency, does the report follow the outcome
    evidence and use CPM only to explain the contrast?
 
