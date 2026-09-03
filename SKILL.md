@@ -199,7 +199,7 @@ actual results.
 
 ## Capture orders are intent, not success
 
-Replay `capture` values are **capture orders** only.
+Replay `capture_orders` / printed `capord` values are **capture orders** only.
 
 A right-click/order on a VP, fuel, munition or territory point means the player
 wanted a unit to capture it. It does not prove the capture completed, the point
@@ -212,7 +212,9 @@ Always:
 - use Relic `pcap` / end-game objective counters for successful captures;
 - use territory/front-line movement for map-pressure analysis;
 - distinguish raw point count from the strategic importance of a specific fuel,
-  munition or VP.
+  munition or VP;
+- keep `recrew` separate: those are team-weapon recrew/capture commands, not
+  territory recaptures.
 
 A high capture-order count can support only a narrow process statement such as
 `frequently issued territory orders`.
@@ -292,7 +294,7 @@ evidence class, cut the line.
 
 Bad:
 
-`K0pF was useless: 16 CPM, hardly any capture commands.`
+`K0pF was useless: 16 CPM, hardly any capture orders.`
 
 Good:
 
