@@ -56,6 +56,13 @@
       "prompt": "A player had repeated mass retreat bursts late game. Did he throw away his army?",
       "expected_output": "Explains that retreat commands mark disengagement/preservation intent and do not encode losses. Uses end-game squad/vehicle losses or other outcome evidence to decide whether preservation was effective. Does not convert retreat count into wipe count or lane-loss certainty.",
       "files": []
+    },
+    {
+      "id": 9,
+      "name": "parser-capture-order-schema",
+      "prompt": "Inspect the replay analyzer output/schema for capture-related fields. What do the capture and recrew numbers mean?",
+      "expected_output": "Parser output uses capord/capture_orders for territory capture commands and explicitly states they are intent only. Team-weapon recrew is a separate recrew field and is never added into territory capture-order totals. No parser field named captures implies successful territory ownership changes.",
+      "files": []
     }
   ]
 }
