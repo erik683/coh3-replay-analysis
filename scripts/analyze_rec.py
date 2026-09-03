@@ -65,8 +65,6 @@ def main():
     r = Replay(args.replay)
     lookup = {}
     if not args.no_lookup:
-        # A missing cache means a ~110 MB download; if that fails we still want
-        # the whole brief, just with raw pbgids instead of names.
         try:
             lookup = load_lookup(cache=args.cache)
         except Exception as exc:
@@ -97,8 +95,6 @@ def main():
         who = ', '.join(P[s].name for _, s in quitters)
         print(f"OUTCOME     {lose} conceded at {mmss(tick)} ({who}) -> {win} won")
     elif quitters:
-        # Some players surrendered but not a whole side -- that is a partial
-        # concede, not a team loss. Their team may still have won.
         who = ', '.join(f"{P[s].name} ({P[s].side}) at {mmss(t)}" for t, s in quitters)
         print(f"OUTCOME     partial concede only -- {who}. Not every player on a side "
               "surrendered, so the file does NOT state a winner. Do not guess.")
@@ -122,8 +118,6 @@ def main():
 
         def n(types):
             return sum(1 for c in mine if c.type in types)
-        # Last REAL action: r.commands still carries the type-158 heartbeat,
-        # which runs to the end of the file for everyone and would hide a drop.
         last = max((c.tick for c in mine), default=0)
         row = dict(cmds=len(mine), cpm=round(len(mine) / dur_min, 1), camera=cam,
                    build=n(BUILD_TYPES), retreat=n(RETREAT_TYPES), attack=n(ATTACK_TYPES),
@@ -144,7 +138,7 @@ def main():
           "counters for successful captures.\n")
     for side in ('AXIS', 'ALLIES'):
         ss = [s for s in slots if P[s].side == side]
-        tot = lambda k: sum(rows[s][k] for s in ss)  # noqa: E731
+        tot = lambda k: sum(rows[s][k] for s in ss)
         print(f"{side:6s} cmds={tot('cmds'):5d}  squads={tot('build'):3d}  "
               f"retreats={tot('retreat'):3d}  attacks={tot('attack'):3d}  "
               f"capture_orders={tot('capture_orders'):3d}  recrews={tot('recrew'):3d}  "
@@ -237,8 +231,6 @@ def main():
             lhs, rhs = args.anchors.split(':')
             parsed = {'AXIS': tuple(float(v) for v in lhs.split(',')),
                       'ALLIES': tuple(float(v) for v in rhs.split(','))}
-            # Arity must be checked here: make_projector unpacks these as
-            # (x, z) far below, outside this guard.
             if any(len(v) != 2 for v in parsed.values()):
                 raise ValueError('each side needs exactly two coordinates')
             anchors = parsed
@@ -281,8 +273,6 @@ def main():
                 continue
             lat = sum(q[2] for q in pos[s]) / len(pos[s])
             dep = sum(q[1] for q in pos[s]) / len(pos[s])
-            # "forward" is opposite for the two sides: Axis advances as depth
-            # rises, Allies as it falls. Own-half must respect that.
             if P[s].side == 'AXIS':
                 own = sum(1 for q in pos[s] if q[1] < 50)
             else:
@@ -351,8 +341,6 @@ def main():
               f"{max(cams.values())} -- possible drop, spectator lag or a static-camera style")
     idle = []
     for s in slots:
-        # Noise-filtered: the ~2s heartbeat (158) never stops, so scanning
-        # r.commands here would make a 45s gap arithmetically impossible.
         ts = sorted(c.tick for c in acts if c.slot == s)
         for i in range(len(ts) - 1):
             if ts[i + 1] - ts[i] > 45 * TICKS_PER_SEC:
