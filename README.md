@@ -1,6 +1,8 @@
-# coh3-replay-analysis — handoff bundle
+# coh3-replay-analysis
 
-Tools to decode and analyse **Company of Heroes 3 replay files (`.rec`)**. The
+Just a fun little thing I threw together after having one too many discussions on WHO'S FAULT IT WAS 😂 *AHEM*, this repo iiiiiiiiis...👇
+
+Agent tools and a primary SKILL.md to help decode and analyze **Company of Heroes 3 replay files (`.rec`)**. The
 format is undocumented; this is reverse-engineered and validated against four
 real multiplayer replays (3v3 and 4v4, two maps each).
 
@@ -8,6 +10,11 @@ Two ways to use it:
 
 - **As a Claude Skill** — install `coh3-replay-analysis.skill`. `SKILL.md` is
   then loaded automatically when a `.rec` file shows up.
+
+  Once installed, give it a spin with something like:
+
+  "Analyze this Company of Heroes 3 match and assess how we got so rekt as Axis. Top level strategy problems, deciding clashes, repeated issues. Break down each player, good news first then the sharp criticism. Finish with MVP and worst player of our Axis team who should deinstall the game."
+  
 - **As plain scripts** — any agent or human can run `scripts/analyze_rec.py`
   directly. Python 3.8+, standard library only. No install step.
 
